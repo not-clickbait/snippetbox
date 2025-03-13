@@ -1,0 +1,17 @@
+version: "3.9"
+name: mysql
+services:
+  mysql:
+    image: mysql:lts
+    container_name: local_dev_mysql
+    environment:
+      MYSQL_ROOT_PASSWORD: root
+      MYSQL_USER: admin
+      MYSQL_PASSWORD: admin
+    ports:
+      - "3306:3306"
+    volumes:
+      - mysql_data:/var/lib/mysql
+
+volumes:
+  mysql_data:
