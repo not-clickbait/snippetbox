@@ -4,9 +4,17 @@ import (
 	"errors"
 	"fmt"
 	"github.com/pixfloage/snippetbox/internal/models"
+	"github.com/pixfloage/snippetbox/internal/validator"
 	"net/http"
 	"strconv"
 )
+
+type snippetCreateForm struct {
+	Title                   string
+	Content                 string
+	Expires                 int
+	validator.FormValidator // embedded struct
+}
 
 func (app *application) home(w http.ResponseWriter, r *http.Request) {
 	// w.Header().Add("Server", "Go") // set by a middleware instead
@@ -46,51 +54,72 @@ func (app *application) snippetView(w http.ResponseWriter, r *http.Request) {
 	data.Snippet = snippet
 
 	app.render(w, r, http.StatusOK, "view.html", data)
-
-	//files := []string{
-	//	"../../ui/html/pages/view.html",
-	//	"../../ui/html/partials/nav.html",
-	//	"../../ui/html/base.html",
-	//}
-	//
-	//ts, err := template.ParseFiles(files...)
-	//if err != nil {
-	//	app.serverError(w, r, err)
-	//	return
-	//}
-
-	//if err := ts.ExecuteTemplate(w, "base", templateData{Snippet: snippet}); err != nil {
-	//	app.serverError(w, r, err)
-	//	return
-	//}
 }
 
 func (app *application) snippetCreate(w http.ResponseWriter, r *http.Request) {
 	data := app.newTemplateData(r)
 
+	data.Form = snippetCreateForm{
+		Expires: 365,
+	}
+
 	app.render(w, r, http.StatusOK, "create.html", data)
 }
 
 func (app *application) snippetCreatePost(w http.ResponseWriter, r *http.Request) {
-	err := r.ParseForm()
-	if err != nil {
+	if err := r.ParseForm(); err != nil {
 		app.clientError(w, http.StatusBadRequest)
 		return
 	}
 
-	title := r.PostForm.Get("title")
-	content := r.PostForm.Get("content")
 	expires, err := strconv.Atoi(r.PostForm.Get("expires"))
 	if err != nil {
 		app.clientError(w, http.StatusBadRequest)
 		return
 	}
 
-	//title := "0 snail"
-	//content := "O snail\nClimb Mount Fuji,\nBut slowly, slowly!\n\n– Kobayashi Issa"
-	//expires := 7
+	form := snippetCreateForm{
+		Title:   r.PostForm.Get("title"),
+		Content: r.PostForm.Get("content"),
+		Expires: expires,
+	}
 
-	id, err := app.snippets.Insert(title, content, expires)
+	form.CheckField(validator.NotBlank(form.Title), "title", "Title cannot be blank")
+	form.CheckField(validator.MaxChars(form.Title, 180), "title", "Title cannot be more than 180 characters")
+
+	form.CheckField(validator.NotBlank(form.Content), "content", "Content cannot be blank")
+
+	form.CheckField(validator.PermittedValue(form.Expires, 1, 7, 365), "expires", "Expires could only be 1, 7 or 365 days")
+
+	if !form.Valid() {
+		data := app.newTemplateData(r)
+		data.Form = form
+		app.render(w, r, http.StatusUnprocessableEntity, "create.html", data)
+		return
+	}
+
+	//if strings.TrimSpace(form.Title) == "" {
+	//	form.FormErrors["title"] = "Title cannot be blank"
+	//} else if utf8.RuneCountInString(form.Title) > 180 {
+	//	form.FormErrors["title"] = "Title cannot be more than 180 characters"
+	//}
+	//
+	//if strings.TrimSpace(form.Content) == "" {
+	//	form.FormErrors["content"] = "Content cannot be blank"
+	//}
+	//
+	//if expires != 1 && expires != 7 && expires != 365 {
+	//	form.FormErrors["expires"] = "Expires could only be 1, 7 or 365 days"
+	//}
+	//
+	//if len(form.FormErrors) > 0 {
+	//	data := app.newTemplateData(r)
+	//	data.Form = form
+	//	app.render(w, r, http.StatusUnprocessableEntity, "create.html", data)
+	//	return
+	//}
+
+	id, err := app.snippets.Insert(form.Title, form.Content, form.Expires)
 	if err != nil {
 		app.serverError(w, r, err)
 		return
