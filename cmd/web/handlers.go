@@ -10,10 +10,10 @@ import (
 )
 
 type snippetCreateForm struct {
-	Title                   string
-	Content                 string
-	Expires                 int
-	validator.FormValidator // embedded struct
+	Title                   string `form:"title"` // map from HTML form "title" to this struct Title
+	Content                 string `form:"content"`
+	Expires                 int    `form:"expires"` // struct embedding, ignore this field during decoding
+	validator.FormValidator `form:"-"`
 }
 
 func (app *application) home(w http.ResponseWriter, r *http.Request) {
@@ -67,21 +67,10 @@ func (app *application) snippetCreate(w http.ResponseWriter, r *http.Request) {
 }
 
 func (app *application) snippetCreatePost(w http.ResponseWriter, r *http.Request) {
-	if err := r.ParseForm(); err != nil {
+	var form snippetCreateForm
+	if err := app.decodePostForm(r, &form); err != nil {
 		app.clientError(w, http.StatusBadRequest)
 		return
-	}
-
-	expires, err := strconv.Atoi(r.PostForm.Get("expires"))
-	if err != nil {
-		app.clientError(w, http.StatusBadRequest)
-		return
-	}
-
-	form := snippetCreateForm{
-		Title:   r.PostForm.Get("title"),
-		Content: r.PostForm.Get("content"),
-		Expires: expires,
 	}
 
 	form.CheckField(validator.NotBlank(form.Title), "title", "Title cannot be blank")
@@ -97,27 +86,6 @@ func (app *application) snippetCreatePost(w http.ResponseWriter, r *http.Request
 		app.render(w, r, http.StatusUnprocessableEntity, "create.html", data)
 		return
 	}
-
-	//if strings.TrimSpace(form.Title) == "" {
-	//	form.FormErrors["title"] = "Title cannot be blank"
-	//} else if utf8.RuneCountInString(form.Title) > 180 {
-	//	form.FormErrors["title"] = "Title cannot be more than 180 characters"
-	//}
-	//
-	//if strings.TrimSpace(form.Content) == "" {
-	//	form.FormErrors["content"] = "Content cannot be blank"
-	//}
-	//
-	//if expires != 1 && expires != 7 && expires != 365 {
-	//	form.FormErrors["expires"] = "Expires could only be 1, 7 or 365 days"
-	//}
-	//
-	//if len(form.FormErrors) > 0 {
-	//	data := app.newTemplateData(r)
-	//	data.Form = form
-	//	app.render(w, r, http.StatusUnprocessableEntity, "create.html", data)
-	//	return
-	//}
 
 	id, err := app.snippets.Insert(form.Title, form.Content, form.Expires)
 	if err != nil {
