@@ -8,10 +8,12 @@ services:
       MYSQL_ROOT_PASSWORD: root
       MYSQL_USER: admin
       MYSQL_PASSWORD: admin
+      MYSQL_DATABASE: snippetbox
     ports:
       - "3306:3306"
     volumes:
       - mysql_data:/var/lib/mysql
+      - ./init:/docker-entrypoint-initdb.d
 
 volumes:
   mysql_data:
