@@ -1,6 +1,7 @@
 package main
 
 import (
+	"crypto/tls"
 	"database/sql"
 	"flag"
 	"github.com/alexedwards/scs/mysqlstore"
@@ -24,6 +25,9 @@ type application struct {
 }
 
 func main() {
+	certFileString := "./tls/cert.pem"
+	keyFileString := "./tls/key.pem"
+
 	addr := flag.String("addr", ":4000", "HTTP network address")
 	dsn := flag.String("dsn", "web:web@/snippetbox?parseTime=true", "Database connection string")
 
@@ -62,12 +66,24 @@ func main() {
 		sessionManager: sessionManager,
 	}
 
-	mux := app.routes()
+	tlsConfig := &tls.Config{
+		CurvePreferences: []tls.CurveID{tls.X25519, tls.CurveP256},
+	}
 
-	// logger.Info("starting server", "addr", *addr)
-	logger.Info("starting server", slog.Any("addr", *addr))
+	srv := &http.Server{
+		Addr:         *addr,
+		Handler:      app.routes(),
+		ErrorLog:     slog.NewLogLogger(logger.Handler(), slog.LevelError), // ensures http.Server logs with Snippetbox slogger
+		TLSConfig:    tlsConfig,
+		IdleTimeout:  time.Minute,
+		ReadTimeout:  5 * time.Second,
+		WriteTimeout: 10 * time.Second,
+	}
 
-	err = http.ListenAndServe(*addr, mux)
+	logger.Info("starting server", slog.String("addr", srv.Addr))
+
+	//err = srv.ListenAndServe()
+	err = srv.ListenAndServeTLS(certFileString, keyFileString)
 
 	logger.Error(err.Error())
 	os.Exit(1)
